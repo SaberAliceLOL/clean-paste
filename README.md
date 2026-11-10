@@ -1,8 +1,95 @@
 # CleanPaste
 
-按 `Ctrl+Shift+V` 粘贴时，把剪贴板内容清洗成干净段落，再自动粘贴。原来按 `Ctrl+V` 的地方改成按 `Ctrl+Shift+V` 即可，其他习惯不变。
+Paste from PDFs and AI answers into Word as clean plain text — one hotkey.
 
-因为只往剪贴板写纯文本，Word 没有格式可带，粘贴结果一定是无格式的。
+**English** | [中文](#中文)
+
+Press `Ctrl+Shift+V` instead of `Ctrl+V`. CleanPaste strips the formatting off whatever is on the clipboard, then pastes it. Because only plain text is written to the clipboard, Word has no formatting left to carry over.
+
+Your normal `Ctrl+V` is untouched, so copying formatted text from another Word document still works as before.
+
+## What it fixes
+
+| Source | Before | After |
+| --- | --- | --- |
+| PDF body text | One hard line break per visual line | Joined into real paragraphs |
+| PDF hyphenation | `hyph-` + newline + `enated` | `hyphenated` |
+| AI answers | `## Heading`, `**bold**`, `` `code` `` | Plain words only |
+| AI links | `[docs](https://x.com)` | `docs` |
+| Terminal output | `┌──┬──┐`, `\e[32m` color codes | Clean tab-separated text |
+
+## Cleaning rules
+
+Applied in this order:
+
+1. **Newlines** — `CRLF`/`CR` normalized to `LF`
+2. **ANSI escapes** — terminal color codes and OSC sequences removed
+3. **Invisible characters** — zero-width chars, soft hyphens and BOM removed; full-width and non-breaking spaces become normal spaces
+4. **Box-drawing characters** — `─│┌┐└┘├┤┬┴┼` and friends become tabs (column separators survive, border rows collapse into paragraph breaks)
+5. **Markdown stripping**
+   - Dropped entirely: code fences ```` ``` ````, horizontal rules
+   - Markers removed, text kept: `#` headings, `>` quotes, `- * +` lists, `1.` numbering, `**` `__` `~~` inline emphasis, inline backticks, link syntax
+   - Image syntax removed along with the image
+6. **Paragraph boundaries** — PDF copies have no blank lines, so paragraphs are inferred from line length:
+   - a line ending in `。！？.!?：:；;` ends a paragraph
+   - a line shorter than half the typical line length (median) ends a paragraph
+   - for very short text where line length tells you nothing, only sentence-ending punctuation breaks paragraphs
+7. **Joining lines inside a paragraph**
+   - CJK (including kana, Hangul and full-width punctuation) joins directly with no space
+   - Latin text gets a single space
+   - a trailing hyphen followed by a letter is joined without the hyphen
+
+Paragraphs are separated by meaning, not by extra blank lines — each one becomes a single paragraph in Word.
+
+## Known limits
+
+These are left as-is:
+
+- **Table structure** — PDF table columns are aligned with spaces; extra spaces get collapsed, but the result is not converted into a real Word table
+- **Footnote markers** — `[1]`, `[2]` in body text are kept as-is, not removed or turned into superscripts
+- **Formulas and symbols** — math symbols and super/subscripts depend on what the source put on the clipboard; untouched
+- **Scanned PDFs** — these are images, no text can be copied; OCR first
+- **Non-text clipboards** — copying an image or a file makes `Ctrl+Shift+V` fall back to a normal paste
+- **Short one-line-per-paragraph text** — when every line has the same length there is no fold to detect, so they merge into one paragraph. That is inherent to guessing; `Ctrl+Z` undoes it
+
+## Files
+
+```
+CleanPaste.ahk        hotkey entry point, 31 lines
+lib/CleanText.ahk     cleaning rules, pure functions, testable on its own
+```
+
+## Install
+
+Requires [AutoHotkey v2](https://www.autohotkey.com/) (built and tested against v2.0.31).
+
+Run `CleanPaste.ahk` with AutoHotkey v2. To start it at login, put a shortcut to `AutoHotkey64.exe` with `CleanPaste.ahk` as its argument into:
+
+```
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\
+```
+
+## Changing the hotkey
+
+Edit line 14 of `CleanPaste.ahk`. AutoHotkey modifiers: `^` = Ctrl, `+` = Shift, `!` = Alt, `#` = Win.
+
+```ahk
+^+v:: {    ; ← change this
+```
+
+Restart the script to apply (right-click the tray icon → Exit, then run it again).
+
+---
+
+# 中文
+
+从 PDF 和 AI 回答里复制文字，按一个热键就以纯文本粘进 Word。
+
+**中文** | [English](#cleanpaste)
+
+按 `Ctrl+Shift+V` 代替 `Ctrl+V`。CleanPaste 会把剪贴板内容清洗成纯文字再自动粘贴。因为只往剪贴板写纯文本，Word 没有格式可带，粘贴结果一定是无格式的。
+
+你原来的 `Ctrl+V` 完全不变，所以从 Word 复制带格式文字的正常场景不受影响。
 
 ## 用起来是什么效果
 
@@ -57,15 +144,13 @@ lib/CleanText.ahk     清洗规则，纯函数，可单独测试
 
 ## 安装与自启
 
-需要 [AutoHotkey v2](https://www.autohotkey.com/)（已装 v2.0.31）。
+需要 [AutoHotkey v2](https://www.autohotkey.com/)（在 v2.0.31 上开发测试）。
 
-已创建开机自启快捷方式：
+用 AutoHotkey v2 运行 `CleanPaste.ahk`。要开机自启，把指向 `AutoHotkey64.exe`、参数为 `CleanPaste.ahk` 的快捷方式放进：
 
 ```
-%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\CleanPaste.lnk
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\
 ```
-
-临时停用：托盘图标右键退出。永久停用：删掉那个 `.lnk`。
 
 ## 改热键
 
